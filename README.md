@@ -1,16 +1,13 @@
-# Code for running APPJ experiments
+# Mesbah Lab APPJ
 
-This code depends on running the code with all devices connected and within a proper Python environment with appropriate dependencies installed.
+This is a cleaned-up version of [APPJ_Control]() which was forked from Dogan Gidon's [APPJ_Control]() repository. This will be the location of the latest info (until August 2024) about the atmospheric pressure plasma jet (APPJ) located in the Mesbah Lab at UC Berkeley.
 
-This repository assumes the use of conda environments. Create a new conda environment and install the required dependencies via
-`conda env create -f appj-env.yml`
+The repository contains condensed information from the previous iterations. Users seeking more info are recommended to look at the previous iterations.
 
-Connect your computer to the devices in the APPJ and test the connection by:
+The `Documentation` folder contains information regarding various aspects of using and/or setting up the APPJ.
 
-1. [SPECTROMETER TEST] Run `spectroscopyLive.py` to test the connection to the spectrometer. You should run this file as any Python file from the command line AND include one additional argument. This argument is a positive number that determines the number of seconds the program will run. If you are connected, the code should run without errors and a figure should pop up displaying the spectra collected by the spectrometer. The window updates roughly every second. The Terminal will also print out the total optical intensity captured (defined as the sum of all intensity values captured by the spectrometer at the given instance). The code also removes the first 20 points.
-`python3 spectroscopyLive.py 1000`
+The `Hardware` folder contains information regarding the physical devices that are used in this setup (to be verified and updated).
 
-2. [IR CAMERA TEST] Change directory (`cd`) into `utils` and run `uvcRadiometry_test.py`. You should run this file as any Python file from the command line without any additional arguments. If you are properly connected, the code will run without errors and a figure should pop up displaying the thermal image being captured by the camera. Furthermore, the maximum and minimum temperatures should be labeled.
-`python3 uvcRadiometry_test.py`
+The `Firmware` folder contains information regarding the Arduino device connected to manage data acquisition and deployment.
 
-3. [ARDUINO TEST] Run `arduino_test.py` to test the connection to the Arduino. You should run this file as any Python file from the command line. If you are connected, the code should run without errors and a line read from the Arduino is printed as output every second. Exit the program with `Ctrl C`
+The `Software` folder contains information regarding the relevant Python scripts that can be utilized to automate data acquisition.
