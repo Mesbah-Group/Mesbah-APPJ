@@ -1,5 +1,7 @@
 # Code for running APPJ experiments
 
+*Note: This README assumes that you have already read `../Documentation/APPJ_communication.md` to set up your device to work with the setup.*
+
 This code depends on running the code with all devices connected and within a proper Python environment with appropriate dependencies installed. It is highly recommended to install the dependencies within a virtual environment. This repository comes with support for `conda` environments or self-made environments.
 
 ## Via conda
