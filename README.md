@@ -1,6 +1,6 @@
 # Mesbah Lab APPJ
 
-This is a cleaned-up version of [APPJ_Control]() which was forked from Dogan Gidon's [APPJ_Control]() repository. This will be the location of the latest info (until August 2024) about the atmospheric pressure plasma jet (APPJ) located in the Mesbah Lab at UC Berkeley.
+This is a cleaned-up version of [APPJ_Control](https://github.com/kchan45/APPJ_Control) which was forked from Dogan Gidon's [APPJ_Control](https://github.com/dgngdn/APPJ_Control) repository. This will be the location of the latest info (until August 2024) about the atmospheric pressure plasma jet (APPJ) located in the Mesbah Lab at UC Berkeley.
 
 The repository contains condensed information from the previous iterations. Users seeking more info are recommended to look at the previous iterations.
 
