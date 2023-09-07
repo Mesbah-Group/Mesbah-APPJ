@@ -1,4 +1,4 @@
-# APPJ Communication
+# Arduino Communication
 
 The APPJ is operated via communication to an Arduino. This Arduino accepts commands to change various parameters of the APPJ setup. Additionally, it sends various measured data in a comma-separated line. See the `Firmware` folder for more information and the associated firmware for the Arduino.
 
@@ -35,6 +35,7 @@ By default, the operating parameters that must be sent to ignite the plasma are 
 [^2]: These operating parameters have not been verified for use after the 2020 move to 2nd floor of Tan.
 [^3]: The default setup has V14 firmware preloaded to the Arduino (which allows for embedded control of the power via manipulation of the peak-to-peak voltage). Peak-to-peak voltage manipulation is not supported on this version, but is supported with V12 firmware.
 
+## Data Collection
 Logging data sent to and received from the APPJ may be done via a Python script. This requires the following Python packages to be installed:
 * matplotlib[^4]
 * numpy[^4]
