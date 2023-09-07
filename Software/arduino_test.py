@@ -1,17 +1,14 @@
 import serial
 import time
 
-import utils.APPJPythonFunctions as appj
-
-
-
-
+import utils.arduino as ard_utils
 
 # Arduino
-arduinoAddress = appj.getArduinoAddress(os="ubuntu")
+arduinoAddress = ard_utils.getArduinoAddress(os="ubuntu")
 print("Arduino Address: ", arduinoAddress)
 arduinoPI = serial.Serial(arduinoAddress, baudrate=38400, timeout=1)
 
 while True:
-    appj.getMeasArduino(arduinoPI)
+    out = ard_utils.getMeasArduino(arduinoPI)
+    print(list(out).join(',    '))
     time.sleep(1)

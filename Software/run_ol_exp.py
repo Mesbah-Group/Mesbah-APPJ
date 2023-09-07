@@ -23,7 +23,6 @@ from seabreeze.spectrometers import Spectrometer, list_devices
 import time
 import os
 import serial
-import cv2
 from datetime import datetime
 import asyncio
 # pickle import to save class data
@@ -32,31 +31,39 @@ try:
 except ModuleNotFoundError:
     import pickle
 import argparse
+from picosdk.ps2000a import ps2000a as ps
 
 ## import user functions
-import utils.APPJPythonFunctions as appj
+from utils.run_options import RunOpts
+from utils.async_measurement import async_measure
+import utils.thermal_camera as tc_utils
+import utils.arduino as ard_utils
+from utils.oscilloscope import Oscilloscope
 from utils.experiments import Experiment
 
-sample_num_default = 0 # sample number for treatment
-time_treat_default = 30.0 # time to run experiment in seconds
-P_treat_default = 2.0 # power setting for the treatment in Watts
-q_treat_default = 2.0 # flow setting for the treatment in SLM
-dist_treat_default = 5.0 # jet-to-substrate distance in cm
+SAMPLE_NUMBER = 0 # sample number for treatment
+TREATMENT_TIME = 30.0 # time to run experiment in seconds
+POWER = 2.0 # power setting for the treatment in Watts
+FLOWRATE = 2.0 # flow setting for the treatment in SLM
+SEP_DISTANCE = 5.0 # jet-to-substrate distance in cm
+SAMPLING_TIME = 1.0 # sampling time for data collection in seconds
 
 ################################################################################
 ## Set up argument parser
 ################################################################################
 parser = argparse.ArgumentParser(description='Experiment Settings')
-parser.add_argument('-n', '--sample_num', type=int, default=sample_num_default,
+parser.add_argument('-n', '--sample_num', type=int, default=SAMPLE_NUMBER,
                     help='The sample number for the test treatments.')
-parser.add_argument('-t', '--time_treat', type=float, default=time_treat_default,
+parser.add_argument('-t', '--time_treat', type=float, default=TREATMENT_TIME,
                     help='The treatment time desired in seconds.')
-parser.add_argument('-p', '--P_treat', type=float, default=P_treat_default,
+parser.add_argument('-p', '--P_treat', type=float, default=POWER,
                     help='The power setting for the treatment in Watts.')
-parser.add_argument('-q', '--q_treat', type=float, default=q_treat_default,
+parser.add_argument('-q', '--q_treat', type=float, default=FLOWRATE,
                     help='The flow rate setting for the treatment in SLM.')
-parser.add_argument('-d', '--dist_treat', type=float, default=dist_treat_default,
+parser.add_argument('-d', '--dist_treat', type=float, default=SEP_DISTANCE,
                     help='The jet-to-substrate distance in centimeters.')
+parser.add_argument('-ts', '--sampling_time', type=float, default=SAMPLING_TIME,
+                    help='The sampling time in seconds.')
 
 args = parser.parse_args()
 sample_num = args.sample_num
@@ -64,13 +71,15 @@ time_treat = args.time_treat
 P_treat = args.P_treat
 q_treat = args.q_treat
 dist_treat = args.dist_treat
+ts = args.sampling_time
 
 print(f"The settings for this treatment are:\n"+
       f"Sample Number:              {sample_num}\n"+
       f"Treatment Time (s):         {time_treat}\n"+
       f"Power (W):                  {P_treat}\n"+
       f"Flow Rate (SLM):            {q_treat}\n"+
-      f"Separation Distance (mm):   {dist_treat}\n")
+      f"Separation Distance (mm):   {dist_treat}\n"+
+      f"Sampling Time (s):          {ts}\n")
 
 cfm = input("Confirm these are correct: [Y/n]\n")
 if cfm in ['Y', 'y']:
@@ -88,7 +97,7 @@ print('Timestamp for save files: ', timeStamp)
 Nrep = 1
 
 # configure run options
-runOpts = appj.RunOpts()
+runOpts = RunOpts()
 runOpts.collectData = True
 runOpts.collectEntireSpectra = True
 runOpts.collectOscMeas = False
@@ -97,10 +106,9 @@ runOpts.saveSpectra = True
 runOpts.saveOscMeas = False
 runOpts.saveSpatialTemp = False
 runOpts.saveEntireImage = False
-runOpts.tSampling = 1.0
+runOpts.tSampling = ts
 
 Nsim = int(time_treat/runOpts.tSampling)
-ts = runOpts.tSampling
 
 ## Set startup values
 dutyCycleIn = 100
@@ -109,38 +117,101 @@ flowIn = q_treat
 
 # set save location
 directory = os.getcwd()
-# os.makedirs(directory+"/ExperimentalData/"+timeStamp, exist_ok=True)
 saveDir = directory+"/ExperimentalData/"+timeStamp+f"-Sample{sample_num}/"
 print('\nData will be saved in the following directory:')
 print(saveDir)
 
 ## connect to/open connection to devices in setup
 # Arduino
-arduinoAddress = appj.getArduinoAddress(os="ubuntu")
+arduinoAddress = ard_utils.getArduinoAddress(os="ubuntu")
 print("Arduino Address: ", arduinoAddress)
 arduinoPI = serial.Serial(arduinoAddress, baudrate=38400, timeout=1)
 s = time.time()
+
 # Oscilloscope
-oscilloscope = appj.Oscilloscope()       # Instantiate object from class
-instr = oscilloscope.initialize()	# Initialize oscilloscope
+## OPTIONAL Configurations for the oscilloscope - in case the settings for the oscilloscope need to be customized
+mode = 'block'  # use block mode to capture the data using a trigger; the other option is 'streaming'
+# for block mode, you may wish to change the following:
+pretrigger_size = 200      # size of the data buffer before the trigger, default is 2000, in units of samples
+posttrigger_size = 800     # size of the data buffer after the trigger, default is 8000, in units of samples
+# for streaming mode, you may wish to change the following:
+single_buffer_size = 500    # size of a single buffer, default is 500
+n_buffers = 10              # number of buffers to acquire, default is 10
+timebase = 2              # timebase for the measurement resolution, 127 corresponds to 1us, default is 8
+
+# see oscilloscope_test.py for more information on defining the channels
+channelA = {"name": "A",
+            "enable_status": 1,
+            "coupling_type": ps.PS2000A_COUPLING['PS2000A_DC'],
+            "range": ps.PS2000A_RANGE['PS2000A_10V'],
+            "analog_offset": 0.0,
+            }
+channelB = {"name": "B",
+            "enable_status": 1,
+            "coupling_type": ps.PS2000A_COUPLING['PS2000A_DC'],
+            "range": ps.PS2000A_RANGE['PS2000A_20V'],
+            "analog_offset": 0.0,
+            }
+channelC = {"name": "C",
+            "enable_status": 1,
+            "coupling_type": ps.PS2000A_COUPLING['PS2000A_DC'],
+            "range": ps.PS2000A_RANGE['PS2000A_20V'],
+            "analog_offset": 0.0,
+            }
+channelD = {"name": "D",
+            "enable_status": 0,
+            "coupling_type": ps.PS2000A_COUPLING['PS2000A_DC'],
+            "range": ps.PS2000A_RANGE['PS2000A_5V'],
+            "analog_offset": 0.0,
+            }
+# put all desired channels into a list (vector with square brackets) named 'channels'
+channels = [channelA, channelB, channelC]
+
+# see oscilloscope_test.py for more information on defining the buffers
+# a buffer must be defined for every channel that is defined above
+bufferA = {"name": "A",
+           "segment_index": 0,
+           "ratio_mode": ps.PS2000A_RATIO_MODE['PS2000A_RATIO_MODE_NONE'],
+           }
+bufferB = {"name": "B"}
+bufferC = {"name": "C"}
+bufferD = {"name": "D"}
+# put all buffers into a list (vector with square brackets) named 'buffers'
+buffers = [bufferA, bufferB, bufferC]
+
+# see /test/oscilloscope_test.py for more information on defining the trigger (TODO)
+# a trigger is defined to capture the specific pulse characteristics of the plasma
+trigger = {"enable_status": 1,
+           "source": ps.PS2000A_CHANNEL['PS2000A_CHANNEL_A'],
+           "threshold": 1024, # in ADC counts
+           "direction": ps.PS2000A_THRESHOLD_DIRECTION['PS2000A_RISING'],
+           "delay": 0, # in seconds
+           "auto_trigger": 200} # in milliseconds
+
+osc = Oscilloscope()
+status = osc.open_device()
+status = osc.initialize_device(channels, buffers, trigger=trigger, timebase=timebase)
+
+
 # Spectrometer
 devices = list_devices()
 print(devices)
 spec = Spectrometer(devices[0])
 spec.integration_time_micros(12000*6)
+
 # Thermal Camera
-dev, ctx = appj.openThermalCamera()
+dev, ctx = tc_utils.openThermalCamera()
 print("Devices opened/connected to sucessfully!")
 
 devices = {}
 devices['arduinoPI'] = arduinoPI
 devices['arduinoAddress'] = arduinoAddress
-devices['instr'] = instr
+devices['osc'] = osc
 devices['spec'] = spec
 
 # send startup inputs
 time.sleep(2)
-appj.sendInputsArduino(arduinoPI, powerIn, flowIn, dutyCycleIn, arduinoAddress)
+ard_utils.sendInputsArduino(arduinoPI, powerIn, flowIn, dutyCycleIn, arduinoAddress)
 input("Ensure plasma has ignited and press Return to begin.\n")
 
 ## Startup asynchronous measurement
@@ -151,13 +222,13 @@ else:
     ioloop = asyncio.get_event_loop()
 # run once to initialize measurements
 prevTime = (time.time()-s)*1e3
-tasks, runTime = ioloop.run_until_complete(appj.async_measure(arduinoPI, prevTime, instr, spec, runOpts))
+tasks, runTime = ioloop.run_until_complete(async_measure(arduinoPI, prevTime, osc, spec, runOpts))
 print('measurement devices ready!')
 s = time.time()
 
 prevTime = (time.time()-s)*1e3
 # get initial measurements
-tasks, runTime = ioloop.run_until_complete(appj.async_measure(arduinoPI, prevTime, instr, spec, runOpts))
+tasks, runTime = ioloop.run_until_complete(async_measure(arduinoPI, prevTime, osc, spec, runOpts))
 if runOpts.collectData:
     thermalCamOut = tasks[0].result()
     Ts0 = thermalCamOut[0]
@@ -207,7 +278,7 @@ arduinoPI = serial.Serial(arduinoAddress, baudrate=38400, timeout=1)
 devices['arduinoPI'] = arduinoPI
 
 # turn off plasma jet (programmatically)
-appj.sendInputsArduino(arduinoPI, 0.0, 0.0, dutyCycleIn, arduinoAddress)
+ard_utils.sendInputsArduino(arduinoPI, 0.0, 0.0, dutyCycleIn, arduinoAddress)
 arduinoPI.close()
 print("Experiments complete!\n"+
     "################################################################################################################\n"+
