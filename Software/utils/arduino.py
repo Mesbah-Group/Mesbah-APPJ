@@ -63,7 +63,7 @@ def getMeasArduino(dev):
     run = True
     while run:
         try:
-            # dev.reset_input_buffer()
+            dev.reset_input_buffer()
             dev.readline()
             line = dev.readline().decode('ascii')
             if is_line_valid(line):
