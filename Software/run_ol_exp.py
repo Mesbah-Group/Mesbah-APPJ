@@ -187,11 +187,25 @@ trigger = {"enable_status": 1,
            "direction": ps.PS2000A_THRESHOLD_DIRECTION['PS2000A_RISING'],
            "delay": 0, # in seconds
            "auto_trigger": 200} # in milliseconds
+           
+signal = {"offsetVoltage": 1000000, # voltage offset, in microvolts
+          "pk2pk": 2000000, # peak-to-peak voltage of waveform signal (in microvolts)
+          "freq": set_freq, # frequency of the wavform signal (in Hertz)
+          "waveform": ctypes.c_int16(1), # type of waveform generated
+          }
+          # (0) PS2000A_SINE          sine wave
+          # (1) PS2000A_SQUARE        square wave
+          # (2) PS2000A_TRIANGLE      triangle wave
+          # (3) PS2000A_RAMP_UP       rising sawtooth
+          # (4) PS2000A_RAMP_DOWN     falling sawtooth
+          # (5) PS2000A_SINC          sin(x)/x
+          # (6) PS2000A_GAUSSIAN      Gaussian
+          # (7) PS2000A_HALF_SINE     half (full-wave rectified) sine
 
 osc = Oscilloscope()
 status = osc.open_device()
 status = osc.initialize_device(channels, buffers, trigger=trigger, timebase=timebase)
-
+status = osc.set_signal(signal)
 
 # Spectrometer
 devices = list_devices()
